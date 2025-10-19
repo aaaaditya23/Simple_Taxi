@@ -1,37 +1,57 @@
-import { type User, type InsertUser } from "@shared/schema";
+import { type Booking, type InsertBooking } from "@shared/schema";
 import { randomUUID } from "crypto";
 
-// modify the interface with any CRUD methods
-// you might need
-
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createBooking(booking: InsertBooking): Promise<Booking>;
+  getBooking(id: string): Promise<Booking | undefined>;
+  getAllBookings(): Promise<Booking[]>;
+  updateBookingStatus(id: string, status: "upcoming" | "completed" | "cancelled"): Promise<Booking | undefined>;
+  deleteBooking(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private bookings: Map<string, Booking>;
 
   constructor() {
-    this.users = new Map();
+    this.bookings = new Map();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async createBooking(insertBooking: InsertBooking): Promise<Booking> {
+    const id = randomUUID();
+    const booking: Booking = {
+      ...insertBooking,
+      id,
+      status: insertBooking.status || "upcoming",
+      createdAt: new Date(),
+    };
+    this.bookings.set(id, booking);
+    return booking;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+  async getBooking(id: string): Promise<Booking | undefined> {
+    return this.bookings.get(id);
+  }
+
+  async getAllBookings(): Promise<Booking[]> {
+    return Array.from(this.bookings.values()).sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
     );
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async updateBookingStatus(
+    id: string,
+    status: "upcoming" | "completed" | "cancelled"
+  ): Promise<Booking | undefined> {
+    const booking = this.bookings.get(id);
+    if (!booking) return undefined;
+    
+    const updated = { ...booking, status };
+    this.bookings.set(id, updated);
+    return updated;
+  }
+
+  async deleteBooking(id: string): Promise<boolean> {
+    return this.bookings.delete(id);
   }
 }
 
