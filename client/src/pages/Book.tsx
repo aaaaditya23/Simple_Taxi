@@ -1,14 +1,19 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 import TaxiTypeCard from "@/components/TaxiTypeCard";
 import { MapPin, Calendar, ArrowRight, ArrowLeft } from "lucide-react";
+import type { InsertBooking } from "@shared/schema";
 
 export default function Book() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [step, setStep] = useState<1 | 2>(1);
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
@@ -16,12 +21,42 @@ export default function Book() {
   const [time, setTime] = useState("");
   const [selectedTaxi, setSelectedTaxi] = useState<"shared" | "normal" | null>(null);
 
+  const createBookingMutation = useMutation({
+    mutationFn: async (bookingData: InsertBooking) => {
+      const res = await apiRequest("POST", "/api/bookings", bookingData);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
+      toast({
+        title: "Booking confirmed!",
+        description: "Your ride has been successfully booked.",
+      });
+      setLocation("/bookings");
+    },
+    onError: () => {
+      toast({
+        title: "Booking failed",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleContinue = () => {
     if (step === 1 && pickup && dropoff && date && time) {
       setStep(2);
     } else if (step === 2 && selectedTaxi) {
-      console.log("Booking confirmed:", { pickup, dropoff, date, time, taxiType: selectedTaxi });
-      setLocation("/bookings");
+      const fare = selectedTaxi === "shared" ? "13.50" : "22.50";
+      createBookingMutation.mutate({
+        pickup,
+        dropoff,
+        date,
+        time,
+        taxiType: selectedTaxi,
+        fare,
+        status: "upcoming",
+      });
     }
   };
 
@@ -179,6 +214,7 @@ export default function Book() {
               <Button
                 variant="outline"
                 onClick={() => setStep(1)}
+                disabled={createBookingMutation.isPending}
                 data-testid="button-back-step2"
               >
                 <ArrowLeft className="mr-2 h-5 w-5" />
@@ -188,10 +224,10 @@ export default function Book() {
                 className="flex-1"
                 size="lg"
                 onClick={handleContinue}
-                disabled={!selectedTaxi}
+                disabled={!selectedTaxi || createBookingMutation.isPending}
                 data-testid="button-confirm-booking"
               >
-                Confirm Booking
+                {createBookingMutation.isPending ? "Confirming..." : "Confirm Booking"}
               </Button>
             </div>
           </div>

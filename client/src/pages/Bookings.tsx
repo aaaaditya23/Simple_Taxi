@@ -1,80 +1,72 @@
-import { useState } from "react";
 import { Link } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 import BookingCard, { type BookingStatus } from "@/components/BookingCard";
-import { Calendar } from "lucide-react";
-
-const mockBookings = [
-  {
-    id: "1",
-    pickup: "123 Main Street, Downtown",
-    dropoff: "456 Park Avenue, Uptown",
-    date: "Dec 28, 2025",
-    time: "10:30 AM",
-    taxiType: "shared" as const,
-    fare: "15.50",
-    status: "upcoming" as BookingStatus,
-  },
-  {
-    id: "2",
-    pickup: "789 Oak Road, West Side",
-    dropoff: "321 Elm Street, East End",
-    date: "Dec 27, 2025",
-    time: "3:45 PM",
-    taxiType: "normal" as const,
-    fare: "24.00",
-    status: "upcoming" as BookingStatus,
-  },
-  {
-    id: "3",
-    pickup: "555 Broadway, Theater District",
-    dropoff: "100 Central Station",
-    date: "Dec 20, 2025",
-    time: "7:00 PM",
-    taxiType: "shared" as const,
-    fare: "12.00",
-    status: "completed" as BookingStatus,
-  },
-  {
-    id: "4",
-    pickup: "200 Airport Road",
-    dropoff: "999 Hotel Plaza",
-    date: "Dec 18, 2025",
-    time: "11:20 AM",
-    taxiType: "normal" as const,
-    fare: "35.50",
-    status: "completed" as BookingStatus,
-  },
-];
+import { Calendar, Loader2 } from "lucide-react";
+import type { Booking } from "@shared/schema";
 
 export default function Bookings() {
-  const [bookings, setBookings] = useState(mockBookings);
-  const [activeTab, setActiveTab] = useState("all");
+  const { toast } = useToast();
+
+  const { data: bookings = [], isLoading } = useQuery<Booking[]>({
+    queryKey: ["/api/bookings"],
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: BookingStatus }) => {
+      const res = await apiRequest("PATCH", `/api/bookings/${id}/status`, { status });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
+      toast({
+        title: "Booking updated",
+        description: "Status updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Update failed",
+        description: "Could not update booking status.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleCancel = (id: string) => {
-    console.log("Cancel booking:", id);
-    setBookings(bookings.map(b => 
-      b.id === id ? { ...b, status: "cancelled" as BookingStatus } : b
-    ));
+    updateStatusMutation.mutate({ id, status: "cancelled" });
   };
 
   const handleRebook = (id: string) => {
     console.log("Rebook:", id);
+    toast({
+      title: "Rebook feature",
+      description: "This would redirect to booking page with pre-filled details.",
+    });
   };
 
   const handleViewDetails = (id: string) => {
     console.log("View details:", id);
+    toast({
+      title: "Booking details",
+      description: "Detailed view would show complete booking information.",
+    });
   };
 
-  const filterBookings = (status?: BookingStatus) => {
-    if (!status) return bookings;
-    return bookings.filter(b => b.status === status);
-  };
+  const upcomingBookings = bookings.filter((b) => b.status === "upcoming");
+  const completedBookings = bookings.filter((b) => b.status === "completed");
 
-  const upcomingBookings = filterBookings("upcoming");
-  const completedBookings = filterBookings("completed");
+  if (isLoading) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-background">
@@ -92,7 +84,7 @@ export default function Bookings() {
           </Link>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs defaultValue="all" className="space-y-6">
           <TabsList data-testid="tabs-bookings">
             <TabsTrigger value="all" data-testid="tab-all">
               All ({bookings.length})
